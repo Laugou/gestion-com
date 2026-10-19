@@ -1,0 +1,14 @@
+# Dépendances et constructions
+node_modules/
+app/dist/
+app/dist-demo/
+# Secrets : ne jamais publier
+.env
+.env.*
+!.env.example
+supabase/.temp/
+supabase/.branches/
+# Divers
+__pycache__/
+.DS_Store
+*.log

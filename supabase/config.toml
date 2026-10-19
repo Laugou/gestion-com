@@ -1,0 +1,22 @@
+# Configuration Supabase pour le déploiement en ligne de commande (supabase link / db push / functions deploy).
+project_id = "gestion-com-cabannes"
+
+[auth]
+# Pas d'inscription libre : seuls les comptes invités par un administrateur existent.
+enable_signup = false
+# Durée de validité du jeton de connexion (en secondes) ; la session se renouvelle automatiquement.
+jwt_expiry = 3600
+minimum_password_length = 12
+password_requirements = "lower_upper_letters_digits"
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = true
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+# Appelée par le webhook de la base, pas par un utilisateur : contrôle par secret partagé.
+[functions.notifier-email]
+verify_jwt = false

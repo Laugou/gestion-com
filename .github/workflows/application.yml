@@ -1,0 +1,76 @@
+# Construit l'application et la publie sur GitHub Pages à chaque modification de la branche main.
+# Tant que les secrets Supabase ne sont pas renseignés, c'est la version de DÉMONSTRATION
+# (données fictives) qui est publiée.
+#
+# Secrets du dépôt (Settings > Secrets and variables > Actions > Secrets) :
+#   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+# Variables facultatives (même écran, onglet Variables) :
+#   VITE_BASE  : « / » si un domaine propre est configuré (ex. com.mairie-cabannes.fr) ;
+#                par défaut « /<nom-du-depot>/ » (adresse https://<compte>.github.io/<nom-du-depot>/)
+#   VITE_DECONNEXION_INACTIVITE_MIN : 240 par défaut
+name: Application
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", ".github/workflows/application.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  construire:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - name: Vérifier le code (types)
+        run: npx tsc --noEmit
+      - name: Construire
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_BASE: ${{ vars.VITE_BASE || format('/{0}/', github.event.repository.name) }}
+          VITE_DECONNEXION_INACTIVITE_MIN: ${{ vars.VITE_DECONNEXION_INACTIVITE_MIN || '240' }}
+        run: |
+          if [ -n "$VITE_SUPABASE_URL" ] && [ -n "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "Version de production (Supabase configuré), chemin $VITE_BASE"
+            npx vite build
+            # GitHub Pages ne connaît pas les adresses internes (/planning…) : la page 404 renvoie vers l'application.
+            cp dist/index.html dist/404.html
+            rm -f dist/_redirects
+          else
+            echo "::warning::Secrets Supabase absents : publication de la version de DÉMONSTRATION."
+            npx vite build --mode demo
+            rm -rf dist && mv dist-demo dist && rm -f dist/_redirects
+          fi
+          touch dist/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/dist
+
+  publier:
+    needs: construire
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - id: deploiement
+        uses: actions/deploy-pages@v4
