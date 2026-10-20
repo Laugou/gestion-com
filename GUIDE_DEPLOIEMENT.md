@@ -78,9 +78,15 @@ Chaque exécution doit afficher « Success ». (Variante en ligne de commande : 
 
 ## 4. Créer le premier compte (administrateur)
 
-*Authentication > Users > Add user > Create new user* : votre adresse, un mot de passe provisoire,
-« Auto Confirm User » coché. **Le tout premier compte créé devient automatiquement administrateur.**
-Les suivants s'invitent ensuite depuis l'écran *Administration* de l'application.
+1. *Authentication > Users > Add user > Create new user* : votre adresse, un mot de passe
+   (12 caractères minimum), « Auto Confirm User » coché.
+2. Par sécurité, **aucun compte ne devient administrateur automatiquement** (sinon un inconnu
+   pourrait s'inscrire avant vous et prendre ce rôle). Désignez-vous dans *SQL Editor* :
+   ```sql
+   update public.profils set role = 'admin', actif = true where email = 'votre.adresse@exemple.fr';
+   ```
+Les comptes suivants s'invitent depuis l'écran *Administration* de l'application. Un compte créé
+autrement (console, inscription libre) reste inactif tant qu'un administrateur ne l'a pas activé.
 
 ## 5. Déployer les fonctions serveur
 

@@ -32,8 +32,10 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000000d', 'lecteur@test.fr', '{"nom":"Lecteur"}'),
   ('00000000-0000-0000-0000-00000000000e', 'parti@test.fr',   '{"nom":"Ancien agent"}');
 
-select tests.verifier('Premier compte = administrateur',
-  (select role from public.profils where email = 'admin@test.fr') = 'admin');
+select tests.verifier('Premier compte : PAS administrateur automatiquement (lecteur inactif)',
+  (select role = 'lecteur' and not actif from public.profils where email = 'admin@test.fr'));
+-- Désignation manuelle du premier administrateur (éditeur SQL)
+update public.profils set role = 'admin', actif = true where email = 'admin@test.fr';
 select tests.verifier('Comptes suivants = lecteur par défaut',
   (select bool_and(role = 'lecteur') from public.profils where email <> 'admin@test.fr'));
 select tests.verifier('Compte créé hors invitation = inactif par défaut',
