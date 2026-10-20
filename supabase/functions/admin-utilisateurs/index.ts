@@ -29,13 +29,13 @@ Deno.serve(async (req) => {
       if (!ROLES.includes(role)) return reponse(req, { erreur: "Rôle inconnu." }, 400);
       const { data, error } = await service.auth.admin.inviteUserByEmail(email, {
         data: { nom },
-        redirectTo: `${APP_URL}/#/definir-mot-de-passe`,
+        redirectTo: `${APP_URL}/definir-mot-de-passe`,
       });
       if (error) {
         const deja = /already|registered|exists/i.test(error.message);
         return reponse(req, { erreur: deja ? "Un compte existe déjà avec cette adresse." : "Invitation impossible : " + error.message }, 400);
       }
-      const { error: e2 } = await service.from("profils").update({ role, nom: nom || undefined }).eq("id", data.user.id);
+      const { error: e2 } = await service.from("profils").update({ role, actif: true, nom: nom || undefined }).eq("id", data.user.id);
       if (e2) return reponse(req, { erreur: "Compte créé mais rôle non enregistré : " + e2.message }, 500);
       return reponse(req, { ok: true, id: data.user.id });
     }

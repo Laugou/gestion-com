@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     .select("email, nom, actif, notif_email").eq("id", notif.destinataire_id).single();
   if (!dest?.actif || !dest.notif_email || !dest.email) return Response.json({ ignore: "destinataire sans courriel" });
 
-  const lien = notif.publication_id ? `${APP_URL}/#/publication/${notif.publication_id}` : `${APP_URL}/#/`;
+  const lien = notif.publication_id ? `${APP_URL}/publication/${notif.publication_id}` : `${APP_URL}/`;
   const objets: Record<string, string> = {
     a_valider: "Publication à valider",
     validee: "Publication validée",

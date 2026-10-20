@@ -12,3 +12,6 @@ supabase/.branches/
 __pycache__/
 .DS_Store
 *.log
+
+# Configuration publique de la version en ligne (adresse et clé publique Supabase)
+!app/.env.production

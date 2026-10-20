@@ -1,7 +1,8 @@
 // Outils partagés par les fonctions serveur.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const APP_URL = Deno.env.get("APP_URL") ?? "";
+// Adresse publique de l'application (pas un secret). Réglable par le paramètre APP_URL.
+const APP_URL = (Deno.env.get("APP_URL") || "https://laugou.github.io/gestion-com").replace(/\/$/, "");
 
 /** En-têtes CORS : seule l'adresse de l'application est autorisée à appeler les fonctions. */
 export function cors(req: Request): Record<string, string> {

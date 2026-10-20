@@ -36,6 +36,13 @@ select tests.verifier('Premier compte = administrateur',
   (select role from public.profils where email = 'admin@test.fr') = 'admin');
 select tests.verifier('Comptes suivants = lecteur par défaut',
   (select bool_and(role = 'lecteur') from public.profils where email <> 'admin@test.fr'));
+select tests.verifier('Compte créé hors invitation = inactif par défaut',
+  (select bool_and(not actif) from public.profils where email <> 'admin@test.fr'));
+insert into auth.users (id, email, raw_app_meta_data) values
+  ('00000000-0000-0000-0000-00000000000f', 'invite@test.fr', '{"role":"redacteur"}');
+select tests.verifier('Compte invité (rôle fixé côté serveur) = actif avec son rôle',
+  (select actif and role = 'redacteur' from public.profils where email = 'invite@test.fr'));
+update public.profils set actif = true where email in ('redac@test.fr', 'elu@test.fr', 'lecteur@test.fr');
 
 update public.profils set role = 'redacteur' where email = 'redac@test.fr';
 update public.profils set role = 'valideur'  where email = 'elu@test.fr';
