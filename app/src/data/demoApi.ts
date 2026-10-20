@@ -303,6 +303,15 @@ export function creerApiDemo(): Api {
       sauver();
     },
 
+    async exportComplet() {
+      exiger(moi().role === "admin", "Action réservée aux administrateurs.");
+      return copie({
+        services: db.services, canaux: db.canaux, profils: db.profils, evenements: db.evenements,
+        publications: db.publications.map(({ canaux: _c, ...p }) => p),
+        publication_canaux: db.publications.flatMap((p) => p.canaux.map((c) => ({ publication_id: p.id, ...c }))),
+        commentaires: db.commentaires, pieces_jointes: db.pieces.map(({ dataUrl: _d, ...p }) => p), historique: db.historique,
+      }) as Record<string, unknown[]>;
+    },
     async assistant(action, d) {
       exiger(peutEcrire(moi().role)); await new Promise((r) => setTimeout(r, 700));
       const base = d.texte.trim() || d.titre;

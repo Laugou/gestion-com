@@ -67,6 +67,9 @@ export interface Api {
   enregistrerService(s: Partial<Service> & { nom: string }): Promise<void>;
   enregistrerCanal(c: Partial<Canal> & { nom: string }): Promise<void>;
 
+  // Sauvegarde : toutes les données lisibles par l'administrateur, en un seul objet
+  exportComplet(): Promise<Record<string, unknown[]>>;
+
   // Assistant de rédaction (null si non configuré)
   assistant(action: ActionAssistant, donnees: { titre: string; texte: string; canaux: string[]; service?: string; date?: string }):
     Promise<{ texte: string; coupe: boolean }>;

@@ -281,6 +281,25 @@ export function creerApiSupabase(url: string, cle: string): Api {
       ok(id ? await sb.from("canaux").update(champs).eq("id", id) : await sb.from("canaux").insert(champs));
     },
 
+    async exportComplet() {
+      // Lecture par tranches de 1 000 lignes (limite par requête du serveur).
+      const tout = async (table: string, colonnes = "*") => {
+        const lignes: unknown[] = [];
+        for (let debut = 0; ; debut += 1000) {
+          const r = await sb.from(table).select(colonnes).range(debut, debut + 999);
+          const lot = ok(r) as unknown[];
+          lignes.push(...lot);
+          if (lot.length < 1000) return lignes;
+        }
+      };
+      const tables: [string, string?][] = [
+        ["services"], ["canaux"], ["profils", "id, nom, email, role, actif, notif_email, cree_le"], ["evenements"],
+        ["publications"], ["publication_canaux"], ["commentaires"], ["pieces_jointes"], ["historique"],
+      ];
+      const sortie: Record<string, unknown[]> = {};
+      for (const [t, c] of tables) sortie[t] = await tout(t, c);
+      return sortie;
+    },
     async assistant(action, donnees) {
       return appelerFonction("assistant-redaction", { action, ...donnees });
     },

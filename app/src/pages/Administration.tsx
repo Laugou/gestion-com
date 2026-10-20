@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
-import { UserPlus } from "lucide-react";
+import { Download, UserPlus } from "lucide-react";
 import { api } from "../data";
 import { useDonnees } from "../etat/Donnees";
 import { useSession } from "../etat/Session";
 import { BoutonConfirmer, Entete, useAction } from "../composants/ui";
 import { ROLES, libelleRole } from "../regles";
 import type { Canal, Role, Service } from "../types";
+import { ecrireStockage, fmtHorodatage, lireStockage, telecharger, versCsv } from "../lib/outils";
 
 export function Administration() {
   const { profil } = useSession();
@@ -19,6 +20,7 @@ export function Administration() {
         <ListeReference type="services" />
         <ListeReference type="canaux" />
       </div>
+      <Sauvegarde />
     </div>
   );
 }
@@ -94,6 +96,54 @@ function ListeReference({ type }: { type: "services" | "canaux" }) {
         <button className="btn" disabled={enCours || !nouveau.trim()}>Ajouter</button>
       </form>
       <p style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 0 }}>Un élément masqué n'est plus proposé, mais les publications qui l'utilisent le conservent.</p>
+    </section>
+  );
+}
+
+/** Sauvegarde manuelle : l'offre gratuite de l'hébergeur ne fait pas de sauvegarde automatique. */
+function Sauvegarde() {
+  const { enCours, executer } = useAction();
+  const [derniere, setDerniere] = useState<string | null>(() => lireStockage<string | null>("gc-derniere-sauvegarde", null));
+  const jours = derniere ? Math.floor((Date.now() - new Date(derniere).getTime()) / 86_400_000) : null;
+  const enRetard = jours == null || jours > 31;
+
+  const exporter = () => executer(async () => {
+    const donnees = await api.exportComplet();
+    const maintenant = new Date();
+    const jour = maintenant.toISOString().slice(0, 10);
+    const fichier = {
+      application: "Gestion COM — Commune de Cabannes",
+      format: 1,
+      exporte_le: maintenant.toISOString(),
+      remarque: "Sauvegarde complète des données. Les fichiers joints (visuels, PDF) ne sont pas inclus : seule leur liste l'est.",
+      totaux: Object.fromEntries(Object.entries(donnees).map(([k, v]) => [k, v.length])),
+      donnees,
+    };
+    telecharger(`gestion-com-sauvegarde-${jour}.json`, JSON.stringify(fichier, null, 2), "application/json;charset=utf-8");
+    // Copie lisible dans Excel des publications, en complément
+    const pubs = (donnees.publications ?? []) as Record<string, unknown>[];
+    if (pubs.length) {
+      const cols = Object.keys(pubs[0]);
+      telecharger(`gestion-com-publications-${jour}.csv`, versCsv([cols, ...pubs.map((p) => cols.map((c) => (p[c] == null ? "" : String(p[c]))))]));
+    }
+    ecrireStockage("gc-derniere-sauvegarde", maintenant.toISOString());
+    setDerniere(maintenant.toISOString());
+  }, "Sauvegarde téléchargée");
+
+  return (
+    <section className="panneau"><h2>Sauvegarde des données <span className="aide">à faire au moins une fois par mois</span></h2>
+      <div className={"bandeau" + (enRetard ? " alerte" : " ok")} style={{ marginBottom: 12 }}>
+        {derniere
+          ? <>Dernière sauvegarde depuis cet appareil : {fmtHorodatage(derniere)}{jours != null && jours > 31 ? ` (il y a ${jours} jours)` : ""}.</>
+          : <>Aucune sauvegarde enregistrée depuis cet appareil.</>}
+      </div>
+      <p style={{ fontSize: 14, marginTop: 0 }}>
+        Télécharge deux fichiers : une sauvegarde complète (.json : publications, canaux et statistiques, événements, commentaires,
+        historique, comptes) et la liste des publications lisible dans Excel (.csv). Rangez-les dans le dossier partagé du service.
+        Les visuels et PDF déposés ne sont pas inclus.
+      </p>
+      <button className="btn primaire" disabled={enCours} onClick={exporter}><Download size={16} /> Exporter toutes les données</button>
+      <p style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 0 }}>Ces fichiers contiennent des données personnelles (noms, adresses des agents) : ne les envoyez pas par messagerie personnelle et ne les déposez pas sur GitHub.</p>
     </section>
   );
 }
