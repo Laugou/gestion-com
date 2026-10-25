@@ -11,7 +11,9 @@ export interface Profil {
 }
 
 export interface Service { id: number; nom: string; couleur: string; ordre: number; actif: boolean }
-export interface Canal { id: number; nom: string; couleur: string; limite_caracteres: number | null; ordre: number; actif: boolean }
+/** Mode de diffusion d'un canal : « manuel » = l'équipe publie elle-même ; sinon envoi direct par la plateforme. */
+export type TypePublication = "manuel" | "facebook" | "instagram";
+export interface Canal { id: number; nom: string; couleur: string; limite_caracteres: number | null; ordre: number; actif: boolean; type_publication: TypePublication }
 
 export interface Evenement {
   id: string;
@@ -33,7 +35,14 @@ export interface PubCanal {
   partages: number | null;
   clics: number | null;
   stats_saisies_le: string | null;
+  /** Renseignés uniquement par le serveur lors d'une diffusion directe */
+  publie_le?: string | null;
+  erreur_publication?: string | null;
+  tentatives?: number;
 }
+
+export interface ResultatDiffusion { reseau: "facebook" | "instagram"; reussi: boolean; message: string; url?: string }
+export interface EtatReseau { configure: boolean; ok?: boolean; compte?: string; message?: string }
 
 export interface Publication {
   id: string;

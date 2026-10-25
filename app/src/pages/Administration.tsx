@@ -1,12 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
-import { Download, UserPlus } from "lucide-react";
+import { Download, Radio, UserPlus } from "lucide-react";
 import { api } from "../data";
 import { useDonnees } from "../etat/Donnees";
 import { useSession } from "../etat/Session";
 import { BoutonConfirmer, Entete, useAction } from "../composants/ui";
 import { ROLES, libelleRole } from "../regles";
-import type { Canal, Role, Service } from "../types";
+import type { Canal, EtatReseau, Role, Service, TypePublication } from "../types";
 import { ecrireStockage, fmtHorodatage, lireStockage, telecharger, versCsv } from "../lib/outils";
 
 export function Administration() {
@@ -20,6 +20,7 @@ export function Administration() {
         <ListeReference type="services" />
         <ListeReference type="canaux" />
       </div>
+      <Reseaux />
       <Sauvegarde />
     </div>
   );
@@ -96,6 +97,49 @@ function ListeReference({ type }: { type: "services" | "canaux" }) {
         <button className="btn" disabled={enCours || !nouveau.trim()}>Ajouter</button>
       </form>
       <p style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 0 }}>Un élément masqué n'est plus proposé, mais les publications qui l'utilisent le conservent.</p>
+    </section>
+  );
+}
+
+/** Publication directe : choix du canal relié à chaque réseau et test de la connexion aux comptes Meta. */
+function Reseaux() {
+  const { refs, recharger } = useDonnees();
+  const { enCours, executer } = useAction();
+  const [etat, setEtat] = useState<{ facebook: EtatReseau; instagram: EtatReseau } | null>(null);
+  const reseaux: { id: Exclude<TypePublication, "manuel">; nom: string }[] = [{ id: "facebook", nom: "Page Facebook" }, { id: "instagram", nom: "Compte Instagram professionnel" }];
+  const relier = (type: Exclude<TypePublication, "manuel">, canalId: number | null) => executer(async () => {
+    const actuel = refs.canaux.find((c) => c.type_publication === type);
+    if (actuel && actuel.id !== canalId) await api.enregistrerCanal({ id: actuel.id, nom: actuel.nom, type_publication: "manuel" });
+    const cible = refs.canaux.find((c) => c.id === canalId);
+    if (cible && cible.type_publication !== type) await api.enregistrerCanal({ id: cible.id, nom: cible.nom, type_publication: type });
+    await recharger("references");
+  }, "Réglage enregistré");
+  return (
+    <section className="panneau"><h2><Radio size={18} style={{ verticalAlign: -3 }} /> Réseaux sociaux <span className="aide">publication directe depuis la plateforme</span></h2>
+      <p style={{ fontSize: 14, marginTop: 0 }}>
+        Une publication <strong>validée</strong> part sur ces réseaux par le bouton « Publier maintenant » de sa fiche, ou toute seule à la date
+        et à l'heure prévues lorsqu'elle est <strong>programmée</strong>. Les autres canaux (site internet, affichage…) restent publiés par l'équipe.
+      </p>
+      <div className="formulaire">
+        {reseaux.map((r) => (
+          <div className="champ" key={r.id}><label htmlFor={`res-${r.id}`}>Canal relié à la {r.nom}</label>
+            <select id={`res-${r.id}`} disabled={enCours} value={refs.canaux.find((c) => c.type_publication === r.id)?.id ?? ""}
+              onChange={(e) => relier(r.id, e.target.value ? Number(e.target.value) : null)}>
+              <option value="">Aucun (publication manuelle)</option>
+              {refs.canaux.filter((c) => c.actif).map((c: Canal) => <option key={c.id} value={c.id}>{c.nom}</option>)}
+            </select></div>
+        ))}
+      </div>
+      <button className="btn" style={{ marginTop: 12 }} disabled={enCours} onClick={() => executer(async () => setEtat(await api.etatReseaux()))}>Tester la connexion aux comptes</button>
+      {etat && <div className="etat-reseaux" role="status">
+        {reseaux.map((r) => { const e = etat[r.id]; return (
+          <div key={r.id}><strong>{r.nom} :</strong>{" "}
+            {e.ok ? <span className="ok">connecté — {e.compte}</span> : <span className="ko">{e.message ?? "non connecté"}</span>}</div>); })}
+      </div>}
+      <p style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 0 }}>
+        Les accès aux comptes Meta (identifiants de la Page et du compte Instagram, jeton d'accès) sont enregistrés par l'administrateur technique
+        dans les paramètres secrets du serveur, jamais dans l'application : voir le guide de mise en ligne, section « Connecter Facebook et Instagram ».
+      </p>
     </section>
   );
 }

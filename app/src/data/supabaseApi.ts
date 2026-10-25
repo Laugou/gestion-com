@@ -29,7 +29,7 @@ function ok<T>(r: { data: T; error: PostgrestError | null }): NonNullable<T> {
   return r.data as NonNullable<T>;
 }
 
-const CHAMPS_PUBLICATION = "*, canaux:publication_canaux(canal_id, texte_specifique, url_publication, portee, interactions, partages, clics, stats_saisies_le)";
+const CHAMPS_PUBLICATION = "*, canaux:publication_canaux(canal_id, texte_specifique, url_publication, portee, interactions, partages, clics, stats_saisies_le, publie_le, erreur_publication, tentatives)";
 
 export function creerApiSupabase(url: string, cle: string): Api {
   const sb: SupabaseClient = createClient(url, cle, {
@@ -294,11 +294,17 @@ export function creerApiSupabase(url: string, cle: string): Api {
       };
       const tables: [string, string?][] = [
         ["services"], ["canaux"], ["profils", "id, nom, email, role, actif, notif_email, cree_le"], ["evenements"],
-        ["publications"], ["publication_canaux"], ["commentaires"], ["pieces_jointes"], ["historique"],
+        ["publications"], ["publication_canaux"], ["commentaires"], ["pieces_jointes"], ["historique"], ["journal_publications"],
       ];
       const sortie: Record<string, unknown[]> = {};
       for (const [t, c] of tables) sortie[t] = await tout(t, c);
       return sortie;
+    },
+    async publierReseaux(publicationId) {
+      return appelerFonction("publier-reseaux", { action: "publier", publication_id: publicationId });
+    },
+    async etatReseaux() {
+      return appelerFonction("publier-reseaux", { action: "etat" });
     },
     async assistant(action, donnees) {
       return appelerFonction("assistant-redaction", { action, ...donnees });

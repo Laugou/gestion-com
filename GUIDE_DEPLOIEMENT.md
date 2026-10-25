@@ -52,7 +52,8 @@ Dans *SQL Editor*, exécuter **dans cet ordre** le contenu de chaque fichier :
 1. `supabase/migrations/20261019000001_schema.sql`
 2. `supabase/migrations/20261019000002_regles_acces.sql`
 3. `supabase/migrations/20261019000003_fichiers_temps_reel.sql`
-4. `supabase/seed.sql`
+4. les migrations suivantes du dossier, dans l'ordre de leur numéro (jusqu'à `…000007_publication_reseaux.sql`)
+5. `supabase/seed.sql`
 
 Chaque exécution doit afficher « Success ». (Variante en ligne de commande : `supabase link` puis `supabase db push`.)
 
@@ -100,6 +101,7 @@ supabase link --project-ref VOTRE-REF-PROJET
 supabase functions deploy admin-utilisateurs
 supabase functions deploy assistant-redaction
 supabase functions deploy notifier-email --no-verify-jwt
+supabase functions deploy publier-reseaux
 
 # Paramètres secrets (jamais dans le code)
 supabase secrets set APP_URL=https://com.mairie-cabannes.fr
@@ -129,6 +131,52 @@ Chaque utilisateur peut couper les courriels dans *Mon compte* ; les notificatio
 dans le SQL Editor. Chaque matin vers 7 h : diffusion du lendemain non validée, validation en attente
 depuis plus de 2 jours, statistiques non saisies 3 jours après diffusion.
 
+## 7 bis. Publication directe sur Facebook et Instagram
+
+Une publication **validée** peut partir sur la Page Facebook et le compte Instagram de la commune :
+- par le bouton **« Publier maintenant »** de sa fiche (rédacteur, valideur, administrateur) ;
+- **automatiquement** à la date et à l'heure prévues quand elle est à l'étape « Programmé »
+  (vérification toutes les 5 minutes ; 9 h si aucune heure n'est saisie ; pas de rattrapage au-delà de 2 jours).
+
+Le serveur refuse tout envoi d'une publication non validée. Un texte de canal ajouté ou modifié après validation
+par un rédacteur renvoie la publication en validation. Seule une image déposée **avant** la validation est envoyée.
+Le site internet et les autres canaux restent publiés à la main.
+
+### Mise en place côté plateforme (une fois)
+1. Appliquer la migration `…000007_publication_reseaux.sql`, déployer la fonction `publier-reseaux`.
+2. *Database > Extensions* : activer `pg_cron`, et `pg_net` (schéma `extensions`).
+3. Exécuter `supabase/optionnel/publication_programmee.sql` (après avoir remplacé la référence du projet et la clé anon).
+   Le secret qui protège la tâche planifiée est créé dans le coffre (Vault) de la base : il n'apparaît nulle part en clair.
+
+### Connexion des comptes Meta [À VÉRIFIER : les écrans et règles de Meta changent souvent]
+Prérequis : un **compte Instagram professionnel** relié à la **Page Facebook** de la commune, et un
+**portefeuille Business** (business.facebook.com) au nom de la mairie, dont la commune est administratrice.
+
+1. Sur developers.facebook.com, créer une **application de type Business** rattachée au portefeuille de la mairie.
+2. Demander les autorisations : `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`,
+   `instagram_basic`, `instagram_content_publish`, `business_management`.
+3. Dans le portefeuille : *Paramètres > Utilisateurs système* : créer un utilisateur système (rôle administrateur),
+   lui attribuer la Page et l'application, puis **générer un jeton** avec les autorisations ci-dessus, sans expiration.
+   Ce jeton donne le droit de publier au nom de la commune : il se range dans le coffre-fort de mots de passe, jamais par courriel.
+4. Relever l'**identifiant de la Page** (Page > À propos > Transparence de la Page) et l'**identifiant Instagram professionnel**
+   (Explorateur de l'API Graph : `GET /{id-de-la-page}?fields=instagram_business_account`).
+5. Supabase > *Edge Functions > Secrets* : créer `FB_PAGE_ID`, `FB_PAGE_TOKEN`, `IG_USER_ID`
+   (facultatif : `GRAPH_VERSION`, par défaut `v23.0`).
+6. Application > *Administration > Réseaux sociaux* > **Tester la connexion aux comptes** : le nom de la Page et le compte
+   Instagram doivent s'afficher.
+
+**Points de vigilance**
+- **Vérification d'entreprise et examen de l'application par Meta** : tant que l'application est « en développement »,
+  les publications risquent de n'être visibles que des personnes ayant un rôle dans l'application. Pour une diffusion
+  publique, Meta exige la vérification de l'entreprise et l'examen des autorisations (compter plusieurs semaines). [À VÉRIFIER]
+- **Instagram** : une image est obligatoire, au format **JPEG**, proportions entre 4:5 et 1,91:1 ; 2 200 caractères et
+  30 mots-dièse au maximum ; quota d'environ 100 publications par 24 h via l'API. [À VÉRIFIER]
+- Jeton révoqué (changement d'administrateur de la Page, mot de passe…) : les envois échouent avec un message explicite
+  dans la fiche et une notification au rédacteur ; régénérer le jeton (étape 3) et mettre à jour `FB_PAGE_TOKEN`.
+- Un envoi automatique en échec est retenté toutes les 5 minutes, 3 fois au plus ; ensuite seul le bouton relance.
+- Trace : table `journal_publications` (incluse dans l'export de sauvegarde).
+
+
 ## 8. Mettre en ligne l'application
 
 ### Option retenue : GitHub Pages (mise en ligne automatique)
@@ -152,7 +200,7 @@ Le dépôt GitHub contient tout le nécessaire (dossier `.github/workflows/`).
    Mettre à jour les adresses Supabase et `APP_URL` en conséquence.
 
 Les autres automatismes :
-- **Tests** : à chaque modification, les 40 contrôles d'accès de la base et la vérification du code
+- **Tests** : à chaque modification, les 55 contrôles d'accès de la base et la vérification du code
   sont rejoués. Une croix rouge dans l'onglet Actions signale un problème : ne pas mettre en production.
 - **Supabase** (lancement manuel) : applique les nouvelles migrations et redéploie les fonctions serveur.
   Secrets à créer : `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`.
@@ -197,5 +245,5 @@ L'écran *Mon compte* rappelle la marche à suivre selon l'appareil.
 - **Sauvegardes** : quotidiennes avec l'offre Pro (7 jours). En complément, exporter chaque mois
   le CSV de l'année (écran Statistiques) dans le dossier partagé du service.
 - **Départ d'un agent** : *Administration > Désactiver* le jour du départ (ses publications restent).
-- **Tests** : après toute modification de la base, lancer `tests/lancer_tests.sh` (40 contrôles d'accès).
+- **Tests** : après toute modification de la base, lancer `tests/lancer_tests.sh` (55 contrôles d'accès).
 - **Mises à jour de sécurité** : une fois par trimestre, `npm outdated` dans `app/`, mise à jour, `npm run build`, redéploiement.

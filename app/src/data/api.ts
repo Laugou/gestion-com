@@ -1,6 +1,6 @@
 import type {
   ActionAssistant, Canal, Commentaire, EntreeHistorique, Evenement, Notification, PieceJointe, Profil,
-  Publication, PublicationSaisie, References, Role, Service, Statut, Stats,
+  Publication, PublicationSaisie, References, Role, Service, Statut, Stats, ResultatDiffusion, EtatReseau,
 } from "../types";
 
 /** Erreur destinée à être affichée telle quelle à l'utilisateur. */
@@ -66,6 +66,10 @@ export interface Api {
   supprimerCompte(id: string): Promise<void>;
   enregistrerService(s: Partial<Service> & { nom: string }): Promise<void>;
   enregistrerCanal(c: Partial<Canal> & { nom: string }): Promise<void>;
+
+  // Diffusion directe (Facebook, Instagram) d'une publication validée
+  publierReseaux(publicationId: string): Promise<{ message: string; resultats: ResultatDiffusion[] }>;
+  etatReseaux(): Promise<{ facebook: EtatReseau; instagram: EtatReseau }>;
 
   // Sauvegarde : toutes les données lisibles par l'administrateur, en un seul objet
   exportComplet(): Promise<Record<string, unknown[]>>;

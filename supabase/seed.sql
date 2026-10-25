@@ -6,7 +6,6 @@ insert into public.services (nom, couleur, ordre) values
   ('Vie associative', '#3B6FD6', 4),
   ('Institutionnel', '#1A3C6E', 5)
 on conflict (nom) do nothing;
-
 -- Limites de caractères : Instagram 2 200 (légende). Laisser vide quand il n'y a pas de limite utile.
 insert into public.canaux (nom, couleur, limite_caracteres, ordre) values
   ('Facebook', '#3B6FD6', null, 1),
@@ -17,3 +16,6 @@ insert into public.canaux (nom, couleur, limite_caracteres, ordre) values
   ('Affichage', '#7A5AC8', null, 6),
   ('Presse locale', '#6B7A90', null, 7)
 on conflict (nom) do nothing;
+-- Canaux publiés directement par la plateforme (les autres restent manuels)
+update public.canaux set type_publication = 'facebook'  where nom = 'Facebook'  and not exists (select 1 from public.canaux where type_publication = 'facebook');
+update public.canaux set type_publication = 'instagram' where nom = 'Instagram' and not exists (select 1 from public.canaux where type_publication = 'instagram');

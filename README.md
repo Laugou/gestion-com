@@ -10,11 +10,11 @@ toutes les diffusions de la communication municipale du service VACC.
 | Tableau de bord | À valider, 7 prochains jours, publiées du mois, points d'attention (retards, validations urgentes, statistiques manquantes), équilibre entre services |
 | Planning | Calendrier mensuel tous canaux (agenda en liste sur téléphone), événements, idées sans date, filtres |
 | Validation | Circuit Idée → Rédaction → À valider → Validé → Programmé → Publié (onglets sur téléphone) |
-| Fiche publication | Texte, canaux, texte propre à chaque canal, compteur de caractères, visuels et PDF, commentaires, historique, assistant de rédaction, statistiques après diffusion |
+| Fiche publication | Texte, canaux, texte propre à chaque canal, compteur de caractères, visuels et PDF, commentaires, historique, assistant de rédaction, statistiques après diffusion, **publication directe sur Facebook et Instagram** une fois validée (bouton « Publier maintenant » ou envoi automatique à la date programmée) |
 | Événements | Programmation municipale, et toutes les publications rattachées à chaque événement |
 | Statistiques | Totaux, par canal, par service, évolution sur 6 mois, export CSV (Excel) du mois ou de l'année |
 | Notifications | Validation demandée, validée, renvoyée avec motif, commentaire, rappels quotidiens (dans l'application et, en option, par courriel) |
-| Administration | Invitation des comptes, rôles, désactivation, suppression ; listes des services et des canaux |
+| Administration | Invitation des comptes, rôles, désactivation, suppression ; listes des services et des canaux ; réseaux sociaux reliés et test de connexion ; sauvegarde |
 | Mon compte | Nom, courriels on/off, mot de passe, double authentification, installation sur l'appareil, déconnexion de tous les appareils |
 
 ## Rôles

@@ -71,6 +71,13 @@ with sync_playwright() as p:
         page.locator(".carte", has_text="loto des écoles").locator("text=Examiner et valider").click()
         page.click("button.succes:has-text('Valider')"); page.wait_for_timeout(500)
         verifier("Valideur : validation enregistrée", page.locator("text=Validée par").count() > 0)
+        # Diffusion directe : Facebook part (simulé), Instagram refuse faute de visuel JPEG
+        page.click(".diffusion button:has-text('Publier maintenant')"); page.click(".diffusion button:has-text('Oui, publier')")
+        page.wait_for_selector(".diffusion .ko", timeout=5000)
+        verifier("Diffusion : Facebook publié", page.locator(".diffusion li", has_text="Facebook").locator(".ok").count() == 1)
+        verifier("Diffusion : Instagram refusé sans visuel, motif affiché", page.locator(".diffusion .ko", has_text="Instagram exige un visuel").count() == 1)
+        verifier("Diffusion : bouton restant limité à Instagram", page.locator(".diffusion button:has-text('Publier maintenant sur Instagram')").count() == 1)
+        page.screenshot(path=str(SORTIE / "ordinateur-5b-diffusion.png"), full_page=True)
         # Le rédacteur modifie un texte validé : retour automatique en validation
         page.select_option("#demo-role", label="Agent communication (Rédacteur)"); page.wait_for_timeout(400)
         page.locator("nav >> text=Validation").first.click(); page.wait_for_timeout(300)
@@ -92,6 +99,9 @@ with sync_playwright() as p:
         page.locator("nav >> text=Administration").first.click(); page.wait_for_selector("#i-email")
         page.fill("#i-nom", "Nouvelle Recrue"); page.fill("#i-email", "recrue@exemple.fr"); page.click("button:has-text('Inviter')"); page.wait_for_timeout(400)
         verifier("Admin : création de compte", page.locator("text=recrue@exemple.fr").count() > 0)
+        page.click("button:has-text('Tester la connexion aux comptes')"); page.wait_for_selector(".etat-reseaux", timeout=5000)
+        verifier("Admin : test de connexion aux réseaux affiché", page.locator(".etat-reseaux >> text=aucun compte réel").count() == 2)
+        verifier("Admin : Facebook relié au canal Facebook", page.eval_on_selector("#res-facebook", "e => e.selectedOptions[0].text") == "Facebook")
         page.screenshot(path=str(SORTIE / "ordinateur-6-administration.png"), full_page=True)
         page.locator("nav >> text=Événements").first.click(); page.wait_for_timeout(300)
         page.screenshot(path=str(SORTIE / "ordinateur-7-evenements.png"), full_page=True)

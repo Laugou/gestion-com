@@ -41,3 +41,4 @@ jobs:
           supabase functions deploy admin-utilisateurs
           supabase functions deploy assistant-redaction
           supabase functions deploy notifier-email --no-verify-jwt
+          supabase functions deploy publier-reseaux

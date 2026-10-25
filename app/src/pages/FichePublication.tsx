@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Copy, FileText, Paperclip, Send, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, FileText, Paperclip, Radio, Send, Sparkles, Trash2 } from "lucide-react";
 import { api, ErreurApp } from "../data";
 import { useDonnees } from "../etat/Donnees";
 import { useSession } from "../etat/Session";
 import { BoutonConfirmer, Chargement, Dialogue, Entete, PastilleEtape, useAction, useToast } from "../composants/ui";
 import { copier, fmtHorodatage, fmtNombre, fmtTaille } from "../lib/outils";
 import { ETAPES_CIRCUIT, libelleEtape, peutEcrire, peutValider, transitionAutorisee } from "../regles";
-import type { ActionAssistant, Commentaire, EntreeHistorique, PieceJointe, Publication, PublicationSaisie, Stats, Statut } from "../types";
+import type { ActionAssistant, Canal, Commentaire, EntreeHistorique, PieceJointe, Publication, PublicationSaisie, Stats, Statut } from "../types";
 
 const vierge = (date?: string | null, evenement?: string | null, moi?: string): PublicationSaisie => ({
   titre: "", texte: "", service_id: null, evenement_id: evenement ?? null, statut: "redaction",
@@ -199,6 +199,7 @@ export function FichePublication() {
               {peut("annule") && statut !== "annule" && <BoutonConfirmer libelle="Annuler la diffusion" question="Annuler cette diffusion ?" onConfirmer={() => changerEtape("annule", undefined, "Diffusion annulée")} />}
             </div>
             {!ecrit && <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 0 }}>Vous consultez cette publication en lecture. Vous pouvez la commenter.</p>}
+            {pub && <BlocDiffusion pub={pub} canaux={refs.canaux} ecrit={ecrit} modifie={modifie} onFait={() => recharger("publications")} />}
         </section>
 
         <div className="pile zone-cote">
@@ -228,6 +229,64 @@ export function FichePublication() {
       )}
 
       {renvoi && <DialogueRenvoi onFermer={() => setRenvoi(false)} onEnvoyer={async (motif) => { setRenvoi(false); await changerEtape("redaction", motif, "Renvoyée au rédacteur"); }} />}
+    </div>
+  );
+}
+
+/** Diffusion directe sur les réseaux connectés (Facebook, Instagram) : état par canal et bouton d'envoi. */
+function BlocDiffusion({ pub, canaux, ecrit, modifie, onFait }: { pub: Publication; canaux: Canal[]; ecrit: boolean; modifie: boolean; onFait: () => void }) {
+  const toast = useToast();
+  const { enCours, executer } = useAction();
+  const [confirmer, setConfirmer] = useState(false);
+  const auto = pub.canaux.map((pc) => ({ pc, canal: canaux.find((c) => c.id === pc.canal_id) }))
+    .filter((x) => x.canal && x.canal.type_publication !== "manuel");
+  const manuels = pub.canaux.map((pc) => canaux.find((c) => c.id === pc.canal_id)).filter((c) => c && c.type_publication === "manuel");
+  if (!auto.length) return null;
+  const restants = auto.filter((x) => !x.pc.publie_le);
+  const validee = pub.statut === "valide" || pub.statut === "programme";
+  const heure = pub.heure_diffusion ? pub.heure_diffusion.slice(0, 5).replace(":", " h ") : "9 h";
+  const dateFr = pub.date_diffusion ? new Date(pub.date_diffusion + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }) : null;
+  const noms = restants.map((x) => x.canal!.nom).join(" et ");
+
+  const publier = () => executer(async () => {
+    const r = await api.publierReseaux(pub.id);
+    onFait();
+    const echecs = r.resultats.filter((x) => !x.reussi);
+    if (!r.resultats.length) toast(r.message);
+    else if (echecs.length) toast(`Échec sur ${echecs.map((e) => e.reseau === "facebook" ? "Facebook" : "Instagram").join(" et ")} : voir le détail ci-dessous`, true);
+    else toast(api.demo ? "Diffusion simulée (démonstration)" : "Publié sur " + r.resultats.map((x) => x.reseau === "facebook" ? "Facebook" : "Instagram").join(" et "));
+  });
+
+  return (
+    <div className="diffusion">
+      <h3><Radio size={15} /> Diffusion directe</h3>
+      <ul>
+        {auto.map(({ pc, canal }) => (
+          <li key={pc.canal_id}>
+            <span className="pastille-canal" style={{ background: canal!.couleur }} aria-hidden />
+            <strong>{canal!.nom}</strong>{" "}
+            {pc.publie_le
+              ? <span className="ok">publié le {fmtHorodatage(pc.publie_le)}{pc.url_publication && <> — <a href={pc.url_publication} target="_blank" rel="noopener noreferrer">voir</a></>}</span>
+              : pc.erreur_publication
+                ? <span className="ko">échec ({pc.tentatives ?? 1}/3) : {pc.erreur_publication}</span>
+                : <span className="attente">{validee ? "pas encore publié" : "après validation"}</span>}
+          </li>
+        ))}
+      </ul>
+      {restants.length > 0 && !validee && pub.statut !== "publie" &&
+        <p className="aide-diffusion">L'envoi direct sera possible une fois la publication validée.</p>}
+      {restants.length > 0 && pub.statut === "valide" &&
+        <p className="aide-diffusion">Publiez maintenant, ou cliquez « Programmer » : l'envoi partira alors tout seul {dateFr ? <>le <strong>{dateFr} à {heure}</strong></> : "à la date de diffusion (à renseigner)"}.</p>}
+      {restants.length > 0 && pub.statut === "programme" &&
+        <p className="aide-diffusion">Envoi automatique prévu {dateFr ? <>le <strong>{dateFr} à {heure}</strong></> : <strong>dès qu'une date de diffusion sera renseignée</strong>} (vérification toutes les 5 minutes).</p>}
+      {ecrit && validee && restants.length > 0 && (modifie
+        ? <p className="aide-diffusion">Enregistrez d'abord vos modifications.</p>
+        : confirmer
+          ? <span className="confirmer">Publier maintenant sur {noms} ? Le message sera visible de tous.
+              <button className="btn primaire petit" disabled={enCours} onClick={() => { setConfirmer(false); publier(); }}>Oui, publier</button>
+              <button className="btn petit" onClick={() => setConfirmer(false)}>Non</button></span>
+          : <button className="btn primaire" disabled={enCours} onClick={() => setConfirmer(true)}><Send size={16} /> {enCours ? "Envoi en cours…" : `Publier maintenant sur ${noms}`}</button>)}
+      {manuels.length > 0 && <p className="aide-diffusion">À publier par l'équipe : {manuels.map((c) => c!.nom).join(", ")}.</p>}
     </div>
   );
 }

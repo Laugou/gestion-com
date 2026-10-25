@@ -6,9 +6,9 @@
 
 create schema tests;
 create table tests.resultats (n serial, test text, ok boolean, detail text);
-grant usage on schema tests to authenticated, anon;
-grant insert, select on tests.resultats to authenticated, anon;
-grant usage on sequence tests.resultats_n_seq to authenticated, anon;
+grant usage on schema tests to authenticated, anon, service_role;
+grant insert, select on tests.resultats to authenticated, anon, service_role;
+grant usage on sequence tests.resultats_n_seq to authenticated, anon, service_role;
 
 -- Vérifie qu'une requête échoue
 create function tests.doit_echouer(p_test text, p_sql text) returns void language plpgsql as $$
@@ -22,7 +22,7 @@ begin
 end $$;
 create function tests.verifier(p_test text, p_cond boolean, p_detail text default null) returns void language plpgsql as $$
 begin insert into tests.resultats (test, ok, detail) values (p_test, coalesce(p_cond, false), p_detail); end $$;
-grant execute on all functions in schema tests to authenticated, anon;
+grant execute on all functions in schema tests to authenticated, anon, service_role;
 
 -- Comptes de test
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -193,6 +193,57 @@ reset role;
 select tests.verifier('Suppression : l''historique est conservé',
   exists (select 1 from public.historique where action = 'suppression' and titre_publication = 'Marché de Noël')
   and (select count(*) from public.historique where titre_publication = 'Marché de Noël') >= 5);
+
+-- ===================== Publication sur les réseaux =====================
+select tests.verifier('Réseaux : Facebook et Instagram en publication directe, le reste manuel',
+  (select count(*) from public.canaux where type_publication <> 'manuel') = 2
+  and (select type_publication from public.canaux where nom = 'Site internet') = 'manuel');
+insert into public.publications (id, titre, texte, statut, date_diffusion, heure_diffusion, redacteur_id)
+values ('33333333-3333-3333-3333-333333333333', 'Fête votive', 'Programme', 'programme', current_date - 1, '10:00', '00000000-0000-0000-0000-00000000000b'),
+       ('44444444-4444-4444-4444-444444444444', 'Concert', 'Plus tard', 'programme', current_date + 3, null, '00000000-0000-0000-0000-00000000000b'),
+       ('55555555-5555-5555-5555-555555555555', 'Brocante', 'Non validée', 'validation', current_date - 1, null, '00000000-0000-0000-0000-00000000000b');
+insert into public.publication_canaux (publication_id, canal_id)
+select x.id, c.id from (values ('33333333-3333-3333-3333-333333333333'::uuid), ('44444444-4444-4444-4444-444444444444'), ('55555555-5555-5555-5555-555555555555')) x(id)
+cross join public.canaux c where c.nom in ('Facebook', 'Site internet');
+select set_config('request.jwt.claims', '{"role":"service_role"}', false);
+set role service_role;
+select tests.verifier('Programmation : seule la publication programmée et échue est à diffuser',
+  (select array_agg(publication_id) from public.publications_a_diffuser()) = array['33333333-3333-3333-3333-333333333333'::uuid]);
+select tests.verifier('Verrou : réserve le seul canal connecté (pas le site)',
+  (select count(*) from public.reserver_canaux('33333333-3333-3333-3333-333333333333')) = 1);
+select tests.verifier('Verrou : un second envoi simultané ne réserve rien',
+  (select count(*) from public.reserver_canaux('33333333-3333-3333-3333-333333333333')) = 0);
+reset role;
+update public.publication_canaux set publie_le = now(), id_externe = '123_456', en_cours_depuis = null
+ where publication_id = '33333333-3333-3333-3333-333333333333' and canal_id = (select id from public.canaux where nom = 'Facebook');
+select tests.verifier('Serveur : enregistre la diffusion',
+  (select id_externe from public.publication_canaux pc join public.canaux c on c.id = pc.canal_id
+    where publication_id = '33333333-3333-3333-3333-333333333333' and c.nom = 'Facebook') = '123_456');
+select tests.verifier('Programmation : une fois diffusée, plus rien à envoyer',
+  not exists (select 1 from public.publications_a_diffuser()));
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000b","role":"authenticated"}', false);
+set role authenticated;
+update public.publication_canaux set publie_le = null, id_externe = 'faux', tentatives = 0
+ where publication_id = '33333333-3333-3333-3333-333333333333';
+select tests.verifier('Rédactrice : ne peut pas falsifier l''état de diffusion (ignoré)',
+  (select id_externe from public.publication_canaux pc join public.canaux c on c.id = pc.canal_id
+    where publication_id = '33333333-3333-3333-3333-333333333333' and c.nom = 'Facebook') = '123_456');
+select tests.doit_echouer('Rédactrice : ne peut pas retirer un canal déjà diffusé',
+  $$delete from public.publication_canaux where publication_id = '33333333-3333-3333-3333-333333333333'
+     and canal_id = (select id from public.canaux where nom = 'Facebook')$$);
+select tests.doit_echouer('Rédactrice : ne peut pas déclencher la diffusion programmée',
+  'select * from public.publications_a_diffuser()');
+select tests.doit_echouer('Rédactrice : ne peut pas écrire dans le journal',
+  $$insert into public.journal_publications (canal, declenchement, reussi) values ('facebook', 'bouton', true)$$);
+insert into public.publication_canaux (publication_id, canal_id, texte_specifique)
+select '44444444-4444-4444-4444-444444444444', id, 'Texte ajouté après validation' from public.canaux where nom = 'Instagram';
+select tests.verifier('Rédactrice : un texte de canal ajouté après validation renvoie en validation',
+  (select statut from public.publications where id = '44444444-4444-4444-4444-444444444444') = 'validation');
+select tests.verifier('Rédactrice : lit le journal', (select count(*) from public.journal_publications) >= 0);
+reset role;
+select tests.doit_echouer('Canal : deux canaux pour le même réseau refusés',
+  $$update public.canaux set type_publication = 'facebook' where nom = 'Instagram'$$);
 
 -- ===================== Rappels =====================
 insert into public.publications (titre, statut, date_diffusion, redacteur_id)

@@ -4,7 +4,7 @@
 import type { Api } from "./api";
 import { ErreurApp } from "./api";
 import type {
-  Canal, Commentaire, EntreeHistorique, Evenement, Notification, PieceJointe, Profil, Publication, Role, Service, Statut,
+  Canal, Commentaire, EntreeHistorique, Evenement, Notification, PieceJointe, Profil, Publication, Role, Service, Statut, ResultatDiffusion,
 } from "../types";
 import { ajouterJours, aujourdhui, ecrireStockage, lireStockage } from "../lib/outils";
 import { peutEcrire, peutValider, transitionAutorisee } from "../regles";
@@ -24,7 +24,7 @@ interface Base {
   compteur: number;
 }
 
-const CLE = "gc-demo-v3";
+const CLE = "gc-demo-v4";
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
 const maintenant = () => new Date().toISOString();
 
@@ -41,7 +41,8 @@ function baseInitiale(): Base {
   const C: Canal[] = [
     ["Facebook", "#3B6FD6", null], ["Instagram", "#C2477E", 2200], ["Site internet", "#24806F", null],
     ["Cabannes Actu", "#C8A84B", null], ["Panneau lumineux", "#D9722B", null], ["Affichage", "#7A5AC8", null], ["Presse locale", "#6B7A90", null],
-  ].map(([nom, couleur, lim], i) => ({ id: i + 1, nom: nom as string, couleur: couleur as string, limite_caracteres: lim as number | null, ordre: i + 1, actif: true }));
+  ].map(([nom, couleur, lim], i) => ({ id: i + 1, nom: nom as string, couleur: couleur as string, limite_caracteres: lim as number | null, ordre: i + 1, actif: true,
+    type_publication: (i === 0 ? "facebook" : i === 1 ? "instagram" : "manuel") as Canal["type_publication"] }));
   const E: Evenement[] = [
     { id: "e-noel", titre: "Marché de Noël", date_debut: ajouterJours(t, 40), date_fin: ajouterJours(t, 41), lieu: "Place de la mairie", service_id: 2, description: "Exemple d'événement", cree_par: "u-admin" },
     { id: "e-telethon", titre: "Téléthon", date_debut: ajouterJours(t, 47), date_fin: null, lieu: "Salle des fêtes", service_id: 4, description: "", cree_par: "u-admin" },
@@ -299,7 +300,7 @@ export function creerApiDemo(): Api {
     async enregistrerCanal(c) {
       exiger(moi().role === "admin");
       if (c.id) Object.assign(db.canaux.find((x) => x.id === c.id)!, c);
-      else db.canaux.push({ id: ++db.compteur, couleur: "#5B7BB0", limite_caracteres: null, ordre: db.canaux.length + 1, actif: true, ...c } as Canal);
+      else db.canaux.push({ id: ++db.compteur, couleur: "#5B7BB0", limite_caracteres: null, ordre: db.canaux.length + 1, actif: true, type_publication: "manuel", ...c } as Canal);
       sauver();
     },
 
@@ -311,6 +312,33 @@ export function creerApiDemo(): Api {
         publication_canaux: db.publications.flatMap((p) => p.canaux.map((c) => ({ publication_id: p.id, ...c }))),
         commentaires: db.commentaires, pieces_jointes: db.pieces.map(({ dataUrl: _d, ...p }) => p), historique: db.historique,
       }) as Record<string, unknown[]>;
+    },
+    async publierReseaux(pid) {
+      const m = moi(); exiger(peutEcrire(m.role), "Votre rôle ne permet pas de publier."); await new Promise((r) => setTimeout(r, 900));
+      const p = db.publications.find((x) => x.id === pid); if (!p) throw new ErreurApp("Publication introuvable.");
+      if (p.statut !== "valide" && p.statut !== "programme") throw new ErreurApp("Seule une publication validée peut être diffusée.");
+      const image = db.pieces.find((x) => x.publication_id === pid && (x.type_mime ?? "").startsWith("image/"));
+      const resultats: ResultatDiffusion[] = [];
+      for (const pc of p.canaux) {
+        const type = db.canaux.find((c) => c.id === pc.canal_id)?.type_publication;
+        if (!type || type === "manuel" || pc.publie_le) continue;
+        let erreur: string | null = null;
+        if (type === "instagram" && !image) erreur = "Instagram exige un visuel : joignez une image (JPEG) à la publication.";
+        else if (type === "instagram" && image?.type_mime !== "image/jpeg") erreur = "Instagram n'accepte que les images JPEG : remplacez le visuel par un .jpg.";
+        if (erreur) { pc.erreur_publication = erreur; pc.tentatives = (pc.tentatives ?? 0) + 1; resultats.push({ reseau: type, reussi: false, message: erreur }); }
+        else { pc.publie_le = maintenant(); pc.erreur_publication = null; resultats.push({ reseau: type, reussi: true, message: "Publication simulée (démonstration : rien n'est envoyé)" }); }
+      }
+      if (!resultats.length) return { message: "Rien à envoyer : déjà diffusée sur les réseaux connectés.", resultats };
+      tracer(p, "modification", null, p.statut, "Diffusion : " + resultats.map((r) => `${r.reseau} ${r.reussi ? "OK" : "échec"}`).join(", "));
+      const tout = p.canaux.every((pc) => pc.publie_le && db.canaux.find((c) => c.id === pc.canal_id)?.type_publication !== "manuel");
+      if (tout) { const ancien = p.statut; p.statut = "publie"; tracer(p, "etape", ancien, "publie"); }
+      signaler("publications");
+      return { message: resultats.some((r) => !r.reussi) ? "Diffusion incomplète" : "Diffusion réussie", resultats };
+    },
+    async etatReseaux() {
+      exiger(moi().role === "admin", "Action réservée aux administrateurs.");
+      const m = { configure: false, message: "Démonstration : aucun compte réel n'est connecté" };
+      return { facebook: m, instagram: m };
     },
     async assistant(action, d) {
       exiger(peutEcrire(moi().role)); await new Promise((r) => setTimeout(r, 700));

@@ -309,3 +309,18 @@ td.n, th.n { text-align: right; }
 .demo-barre { background: var(--gold-soft); border: 1px dashed var(--gold); border-radius: 10px; padding: 8px 12px; font-size: 13px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .demo-barre select { width: auto; min-height: 32px; padding: 4px 8px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* Diffusion directe (Facebook, Instagram) */
+.diffusion { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.diffusion h3 { display: flex; align-items: center; gap: 6px; font-size: 14px; margin: 0 0 8px; }
+.diffusion ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
+.diffusion li { line-height: 1.4; overflow-wrap: anywhere; }
+.diffusion .pastille-canal { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.diffusion .ok { color: var(--st-publie); font-weight: 600; }
+.diffusion .ko { color: var(--danger); font-weight: 600; }
+.diffusion .attente { color: var(--muted); }
+.diffusion .aide-diffusion { font-size: 13px; color: var(--muted); margin: 6px 0; }
+.diffusion .confirmer { color: var(--ink); }
+.etat-reseaux { display: grid; gap: 8px; margin: 10px 0; font-size: 14px; }
+.etat-reseaux .ok { color: var(--st-publie); font-weight: 600; }
+.etat-reseaux .ko { color: var(--danger); font-weight: 600; }
